@@ -106,7 +106,7 @@
                 <!-- 평가내용 미리보기 (상단 창) -->
                 <div class="flex flex-col flex-1 min-h-[220px]">
                     <div class="flex justify-between items-center mb-2 px-1">
-                        <label class="block text-xs font-bold text-brand-600 dark:text-brand-400">평가내용 (미리보기)</label>
+                        <label id="preview-eval-label" class="block text-xs font-bold text-brand-600 dark:text-brand-400">평가내용 (미리보기)</label>
                         <span class="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">현재 선택 조합 (실시간 반영)</span>
                     </div>
                     <div id="preview-eval" class="flex-1 w-full p-4 text-sm border border-brand-200 dark:border-brand-800/50 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto leading-relaxed shadow-inner">
@@ -132,7 +132,7 @@
         // ==========================================
         // 🔴 반드시 아래 따옴표 안에 Apps Script 웹앱 URL을 입력하세요.
         // ==========================================
-        const scriptUrl = "https://script.google.com/macros/s/AKfycbzQ2IqtJiiFzylomEFIawMR2SClHvy-Q4Ijw0CMvM20q3e2Wx1j33wnS8zWCVf9mABphw/exec";
+        const scriptUrl = "https://script.google.com/macros/s/AKfycbw1MpY54nXuyAzfGqjBuzWabp8LXUZGHWuZHJYGITgn5JRsL5f5tsBERRh4996WxIZgOQ/exec";
         // ==========================================
 
         const state = {
@@ -286,7 +286,9 @@
             updateOverlay();
 
             try {
-                const students = await fetchAppScript('getClassData', { className });
+                // 수행평가 탭 이름들을 백엔드에 보내 해당 열들만 가져옴
+                const assessmentNames = state.settings.assessments.map(a => a.name);
+                const students = await fetchAppScript('getClassData', { className, assessmentNames });
                 
                 if(!students || students.length === 0) {
                     els.studentList.innerHTML = '<div class="text-sm text-center p-4 text-slate-500 font-medium">데이터가 없습니다.<br>시트의 2행부터 정보를 입력해주세요.</div>';
@@ -299,9 +301,15 @@
                     const uniqueKey = s.id || `row_${s.row}`;
                     s.uniqueKey = uniqueKey;
                     
+                    // 각 수행평가별로 데이터 상태를 독립적으로 분리 저장
+                    const evalsParsed = {};
+                    assessmentNames.forEach(assName => {
+                        evalsParsed[assName] = parseExistingEval(s.evals[assName]);
+                    });
+
                     state.selections[uniqueKey] = {
                         row: s.row,
-                        evalData: parseExistingEval(s.evalData)
+                        evals: evalsParsed
                     };
                 });
 
@@ -370,7 +378,8 @@
                 btn.onclick = () => {
                     state.currentAssessmentIdx = idx;
                     renderAssessmentTabs();
-                    renderCriteria(); 
+                    renderCriteria();
+                    updateResultTexts(); // 탭 변경 시 미리보기도 해당 탭 내용으로 변경
                 };
                 els.assessmentTabs.appendChild(btn);
             });
@@ -398,7 +407,9 @@
             const data = state.criteria[category];
             if(!data) return;
 
-            const sData = state.selections[state.currentStudent.uniqueKey].evalData;
+            // 현재 탭(수행평가명)에 맞는 배열만 불러옴
+            const currentAssName = state.settings.assessments[state.currentAssessmentIdx].name;
+            const sData = state.selections[state.currentStudent.uniqueKey].evals[currentAssName];
 
             els.criteriaContainer.innerHTML = '';
             
@@ -428,7 +439,6 @@
                     cb.checked = isChecked;
                     
                     cb.onchange = (e) => {
-                        // 안전하게 배열 조작 (splice 문제 해결)
                         if(e.target.checked) {
                             if(!sData.includes(formattedItem)) sData.push(formattedItem);
                         } else {
@@ -466,11 +476,17 @@
 
         function updateResultTexts() {
             if(!state.currentStudent) return;
+            
+            // 미리보기 창 라벨 텍스트 변경
+            const currentAssName = state.settings.assessments[state.currentAssessmentIdx].name;
+            const labelEl = document.getElementById('preview-eval-label');
+            if(labelEl) labelEl.innerText = `[${currentAssName}] 평가내용 (미리보기)`;
+
             const sData = state.selections[state.currentStudent.uniqueKey];
             const currentStudentData = state.students.find(s => s.uniqueKey === state.currentStudent.uniqueKey);
             
-            // 화면 표시용 (줄바꿈 대신 띄어쓰기로 예쁘게 연결)
-            const previewStr = sData.evalData.join(' ');
+            // 현재 탭의 내용만 연결해서 표시
+            const previewStr = sData.evals[currentAssName].join(' ');
             
             if(previewStr) {
                 els.previewEval.innerHTML = formatRichText(previewStr);
@@ -520,19 +536,22 @@
             if(!state.currentStudent) return;
             
             setSyncStatus('saving');
-            isPendingSave = true; // 사용자 조작 감지 즉시 폴링 차단
+            isPendingSave = true;
             clearTimeout(autoSaveTimeout);
             
             autoSaveTimeout = setTimeout(async () => {
                 isSaving = true;
+                
+                // 현재 클릭한 수행평가명과 그 안의 체크 항목들만 추출
+                const currentAssName = state.settings.assessments[state.currentAssessmentIdx].name;
                 const sData = state.selections[state.currentStudent.uniqueKey];
-                // 🔴 [핵심 변경] 구글 시트 저장 시 '줄바꿈(\n)' 문자로 쪼개서 저장하여 데이터 꼬임 완전 차단
-                const evalStr = sData.evalData.join('\n'); 
+                const evalStr = sData.evals[currentAssName].join('\n'); 
 
                 try {
                     await fetchAppScript('saveStudentData', {
                         className: state.currentClass,
                         rowIndex: sData.row,
+                        assessmentName: currentAssName, // 백엔드에 수행평가명 전달
                         evalText: evalStr
                     }, true); 
                     
@@ -552,12 +571,12 @@
         }
 
         async function pollClassData() {
-            // isPendingSave가 true이면 사용자가 뭔가 누르고 저장 중인 상태이므로 폴링 스킵 (덮어쓰기 방지)
             if (!state.isAuthenticated || !state.currentClass || isSaving || isPendingSave) return;
             if (Date.now() - lastSaveTime < 3000) return;
 
             try {
-                const newStudents = await fetchAppScript('getClassData', { className: state.currentClass }, true);
+                const assessmentNames = state.settings.assessments.map(a => a.name);
+                const newStudents = await fetchAppScript('getClassData', { className: state.currentClass, assessmentNames }, true);
                 if (!newStudents) return;
 
                 let requiresListRender = false;
@@ -583,15 +602,24 @@
                     const oldStudent = state.students.find(s => s.uniqueKey === uniqueKey);
 
                     if (oldSelection && oldStudent) {
-                        const oldEvalStr = oldSelection.evalData.join('\n'); // 🔴 갱신 비교도 줄바꿈 기준으로
-                        const newEvalStr = newStudent.evalData || '';
-                        const oldTotalStr = oldStudent.total || '';
-                        const newTotalStr = newStudent.total || '';
+                        let hasChanged = false;
+                        if ((oldStudent.total || '') !== (newStudent.total || '')) hasChanged = true;
+                        
+                        // 모든 수행평가 항목의 변경을 감지
+                        assessmentNames.forEach(assName => {
+                            const oldEvalStr = oldSelection.evals[assName] ? oldSelection.evals[assName].join('\n') : '';
+                            const newEvalStr = newStudent.evals[assName] || '';
+                            if (oldEvalStr !== newEvalStr) hasChanged = true;
+                        });
 
-                        if (oldEvalStr !== newEvalStr || oldTotalStr !== newTotalStr) {
+                        if (hasChanged) {
+                            const evalsParsed = {};
+                            assessmentNames.forEach(assName => {
+                                evalsParsed[assName] = parseExistingEval(newStudent.evals[assName]);
+                            });
                             newSelections[uniqueKey] = {
                                 row: newStudent.row,
-                                evalData: parseExistingEval(newEvalStr)
+                                evals: evalsParsed
                             };
                             if (state.currentStudent && state.currentStudent.uniqueKey === uniqueKey) {
                                 requiresCurrentRender = true;
@@ -601,9 +629,13 @@
                             newSelections[uniqueKey].row = newStudent.row; 
                         }
                     } else {
+                        const evalsParsed = {};
+                        assessmentNames.forEach(assName => {
+                            evalsParsed[assName] = parseExistingEval(newStudent.evals[assName]);
+                        });
                         newSelections[uniqueKey] = {
                             row: newStudent.row,
-                            evalData: parseExistingEval(newStudent.evalData)
+                            evals: evalsParsed
                         };
                     }
                 });
