@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세부능력 및 특기사항 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .spinner { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 h-screen flex flex-col overflow-hidden transition-colors duration-200">
+
+    <header class="bg-brand-600 dark:bg-slate-800 text-white shadow-md z-10 shrink-0 border-b border-brand-700 dark:border-slate-700">
+        <div class="px-6 py-3 flex justify-between items-center">
+            <div class="flex flex-col">
+                <div class="flex items-center gap-3">
+                    <h1 id="dashboard-title" class="text-xl font-bold tracking-tight">세특 대시보드 불러오는 중...</h1>
+                    <span id="dashboard-org" class="bg-brand-500/50 dark:bg-slate-700 text-xs px-2 py-1 rounded-md text-white font-medium border border-brand-400/30 dark:border-slate-600"></span>
+                </div>
+                <span class="text-[10px] text-brand-200 dark:text-slate-400 mt-1">개발자: 가치있는 미래교육 연구소 대표 김병찬</span>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <button id="theme-toggle" class="p-2 rounded-full bg-brand-700 hover:bg-brand-800 dark:bg-slate-700 dark:hover:bg-slate-600 transition-colors" title="다크모드/라이트모드 전환">
+                    <svg id="theme-icon-light" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <svg id="theme-icon-dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
+                
+                <div id="sync-indicator" class="hidden items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300 dark:bg-slate-900 border border-slate-700/50 shadow-inner text-xs font-medium mr-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span>최신 상태</span>
+                </div>
+
+                <div class="flex items-center bg-brand-700 dark:bg-slate-700 rounded-lg px-2 py-1 shadow-inner">
+                    <input type="password" id="admin-pw" placeholder="관리자 인증번호" class="bg-transparent border-none outline-none text-sm w-32 placeholder-brand-300 dark:placeholder-slate-400 px-2 text-white">
+                    <button id="auth-btn" class="text-xs bg-white dark:bg-slate-600 text-brand-600 dark:text-white px-2 py-1 rounded font-bold hover:bg-brand-50 dark:hover:bg-slate-500 transition-colors">인증</button>
+                </div>
+                <span id="auth-status" class="text-xs font-medium text-red-200 dark:text-red-400">읽기 전용</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden p-4 gap-4">
+        
+        <aside class="w-64 flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
+                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">학반 선택</label>
+                <select id="class-select" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm outline-none focus:border-brand-500 dark:focus:border-brand-500 transition-colors cursor-pointer"></select>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2" id="student-list">
+                <!-- 초기 안내 문구 -->
+                <div class="text-sm text-center p-4 text-slate-500 flex flex-col items-center justify-center h-full gap-2">
+                    <svg class="w-8 h-8 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9.5a2.5 2.5 0 00-2.5-2.5H15"></path></svg>
+                    상단의 학반을 선택해주세요.
+                </div>
+            </div>
+        </aside>
+
+        <section class="flex-1 flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden relative">
+            <div id="editor-overlay" class="absolute inset-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center transition-opacity duration-300">
+                <svg class="w-12 h-12 text-slate-400 dark:text-slate-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <p id="overlay-msg" class="text-slate-600 dark:text-slate-300 font-medium">관리자 인증 후 학생을 선택해주세요.</p>
+            </div>
+
+            <div class="p-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex gap-2 overflow-x-auto" id="assessment-tabs"></div>
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-wrap gap-2" id="category-tabs"></div>
+            
+            <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/30">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-slate-800 dark:text-white" id="current-student-name">학생을 선택하세요</h2>
+                </div>
+                <div id="criteria-container" class="space-y-6 max-w-4xl"></div>
+            </div>
+        </section>
+
+        <aside class="w-[22rem] flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    세특 진행 현황
+                </h3>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 flex flex-col space-y-4">
+                <!-- 평가내용 미리보기 (상단 창) -->
+                <div class="flex flex-col flex-1 min-h-[220px]">
+                    <div class="flex justify-between items-center mb-2 px-1">
+                        <label class="block text-xs font-bold text-brand-600 dark:text-brand-400">평가내용 (미리보기)</label>
+                        <span class="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">현재 선택 조합 (실시간 반영)</span>
+                    </div>
+                    <div id="preview-eval" class="flex-1 w-full p-4 text-sm border border-brand-200 dark:border-brand-800/50 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto leading-relaxed shadow-inner">
+                        <span class="text-slate-400 text-xs flex h-full items-center justify-center">평가 항목을 체크하면 미리보기가 표시됩니다.</span>
+                    </div>
+                </div>
+                
+                <!-- 세특 완성본 (하단 창, 읽기 전용) -->
+                <div class="flex flex-col flex-1 min-h-[220px]">
+                    <div class="flex justify-between items-center mb-2 px-1">
+                        <label class="block text-xs font-bold text-purple-600 dark:text-purple-400">세특 완성본</label>
+                        <span class="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">시트 데이터 (읽기전용)</span>
+                    </div>
+                    <div id="preview-total" class="flex-1 w-full p-4 text-sm border border-purple-200 dark:border-purple-800/50 rounded-lg bg-purple-50/30 dark:bg-purple-900/10 text-slate-700 dark:text-slate-200 overflow-y-auto leading-relaxed shadow-inner">
+                        <span class="text-slate-400 text-xs flex h-full items-center justify-center">구글 시트의 '세특완성본' 열 데이터를 표시합니다.</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        // ==========================================
+        // 🔴 반드시 아래 따옴표 안에 Apps Script 웹앱 URL을 입력하세요.
+        // ==========================================
+        const scriptUrl = "https://script.google.com/macros/s/AKfycbzQ2IqtJiiFzylomEFIawMR2SClHvy-Q4Ijw0CMvM20q3e2Wx1j33wnS8zWCVf9mABphw/exec";
+        // ==========================================
+
+        const state = {
+            isAuthenticated: false,
+            settings: null,
+            criteria: null,
+            students: [],
+            currentClass: '',
+            currentStudent: null,
+            currentAssessmentIdx: 0, 
+            currentCategoryIdx: 0,
+            selections: {} 
+        };
+
+        const els = {
+            title: document.getElementById('dashboard-title'),
+            org: document.getElementById('dashboard-org'),
+            authBtn: document.getElementById('auth-btn'),
+            adminPw: document.getElementById('admin-pw'),
+            authStatus: document.getElementById('auth-status'),
+            themeToggle: document.getElementById('theme-toggle'),
+            themeIconLight: document.getElementById('theme-icon-light'),
+            themeIconDark: document.getElementById('theme-icon-dark'),
+            classSelect: document.getElementById('class-select'),
+            studentList: document.getElementById('student-list'),
+            overlay: document.getElementById('editor-overlay'),
+            overlayMsg: document.getElementById('overlay-msg'),
+            assessmentTabs: document.getElementById('assessment-tabs'),
+            categoryTabs: document.getElementById('category-tabs'),
+            criteriaContainer: document.getElementById('criteria-container'),
+            curStudentName: document.getElementById('current-student-name'),
+            previewEval: document.getElementById('preview-eval'),
+            previewTotal: document.getElementById('preview-total'),
+            syncIndicator: document.getElementById('sync-indicator')
+        };
+
+        // 자동 저장 및 폴링 관련 변수
+        let autoSaveTimeout = null;
+        let isSaving = false;
+        let isPendingSave = false; // 충돌 방지를 위한 플래그 (사용자 조작 ~ 저장완료 시점까지)
+        let lastSaveTime = 0;
+        let pollingInterval = null;
+
+        function initTheme() {
+            const isDark = localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if(isDark) { document.documentElement.classList.add('dark'); updateThemeIcon(true); }
+            else { updateThemeIcon(false); }
+
+            els.themeToggle.addEventListener('click', () => {
+                const willBeDark = !document.documentElement.classList.contains('dark');
+                document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', willBeDark ? 'dark' : 'light');
+                updateThemeIcon(willBeDark);
+            });
+        }
+        function updateThemeIcon(isDark) {
+            if(isDark) { els.themeIconDark.classList.add('hidden'); els.themeIconLight.classList.remove('hidden'); }
+            else { els.themeIconLight.classList.add('hidden'); els.themeIconDark.classList.remove('hidden'); }
+        }
+
+        async function fetchAppScript(action, payload = {}, silent = false) {
+            if (scriptUrl === "여기에_URL_입력") {
+                if(!silent) alert("코드 내에 Apps Script URL을 먼저 입력해주세요!");
+                return null;
+            }
+            try {
+                const response = await fetch(scriptUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, ...payload })
+                });
+                
+                const textRes = await response.text();
+                let res;
+                try {
+                    res = JSON.parse(textRes);
+                } catch(e) {
+                    throw new Error("서버 응답 파싱 오류. 배포 URL이 정확한지 확인하세요.");
+                }
+                
+                if(!res.success) throw new Error(res.error);
+                return res.data;
+            } catch (err) {
+                if(!silent) {
+                    console.error(err);
+                    alert("통신 오류: " + err.message);
+                }
+                throw err;
+            }
+        }
+
+        async function init() {
+            initTheme();
+            try {
+                const data = await fetchAppScript('getInitialData');
+                if(!data) return;
+
+                state.settings = data.settings;
+                state.criteria = data.criteria;
+                
+                els.title.innerText = state.settings.title;
+                els.org.innerText = state.settings.affiliation;
+
+                // 1. "학반을 선택해주세요" 기본 옵션 추가
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = "";
+                defaultOpt.innerText = "학반을 선택해주세요";
+                defaultOpt.disabled = true;
+                defaultOpt.selected = true;
+                els.classSelect.appendChild(defaultOpt);
+
+                // 설정된 학반 목록 추가
+                state.settings.classes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c; opt.innerText = c;
+                    els.classSelect.appendChild(opt);
+                });
+
+                setupEventHandlers();
+            } catch(e) {
+                els.title.innerText = "데이터 로딩 실패";
+            }
+        }
+
+        function setupEventHandlers() {
+            els.authBtn.addEventListener('click', () => {
+                if (els.adminPw.value === state.settings.adminPassword) {
+                    state.isAuthenticated = true;
+                    els.authStatus.innerText = "인증 완료 (편집 가능)";
+                    els.authStatus.className = "text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2 py-1 rounded";
+                    els.adminPw.disabled = true;
+                    els.authBtn.classList.add('hidden');
+                    els.syncIndicator.classList.remove('hidden');
+                    els.syncIndicator.classList.add('flex');
+                    updateOverlay();
+                } else {
+                    alert("비밀번호가 일치하지 않습니다.");
+                }
+            });
+
+            els.classSelect.addEventListener('change', (e) => { loadClassData(e.target.value); });
+        }
+
+        async function loadClassData(className) {
+            if(!className) return;
+            
+            if(pollingInterval) clearInterval(pollingInterval);
+            
+            state.currentClass = className;
+            state.currentStudent = null;
+            els.studentList.innerHTML = '<div class="text-sm text-center p-4 text-slate-500">데이터를 불러오는 중입니다...</div>';
+            updateOverlay();
+
+            try {
+                const students = await fetchAppScript('getClassData', { className });
+                
+                if(!students || students.length === 0) {
+                    els.studentList.innerHTML = '<div class="text-sm text-center p-4 text-slate-500 font-medium">데이터가 없습니다.<br>시트의 2행부터 정보를 입력해주세요.</div>';
+                    return;
+                }
+
+                state.students = students;
+                
+                state.students.forEach(s => {
+                    const uniqueKey = s.id || `row_${s.row}`;
+                    s.uniqueKey = uniqueKey;
+                    
+                    state.selections[uniqueKey] = {
+                        row: s.row,
+                        evalData: parseExistingEval(s.evalData)
+                    };
+                });
+
+                renderStudentList();
+                renderAssessmentTabs();
+                renderCategoryTabs();
+                
+                pollingInterval = setInterval(pollClassData, 5000);
+            } catch (err) {
+                els.studentList.innerHTML = `<div class="text-sm text-center p-4 text-red-500 font-bold">오류 발생<br><span class="font-normal text-xs text-slate-500">${err.message}</span></div>`;
+            }
+        }
+
+        // 구분자 파싱: 줄바꿈(\n)을 우선으로 하여 정규식 꼬임 완벽 방지
+        function parseExistingEval(textStr) {
+            if(!textStr) return [];
+            const str = String(textStr);
+            
+            if(str.includes('\n')) {
+                return str.split('\n').map(p => p.trim()).filter(p => p !== '');
+            }
+            
+            // 구버전(띄어쓰기 저장) 호환용
+            const parts = str.split(/(?=\[[^\]]+\]-)/);
+            return parts.filter(p => p.trim() !== '').map(p => p.trim());
+        }
+
+        function renderStudentList() {
+            els.studentList.innerHTML = '';
+            state.students.forEach(student => {
+                const div = document.createElement('div');
+                div.className = `p-3 mb-1 rounded-lg cursor-pointer text-sm font-medium transition-colors border ${state.currentStudent?.row === student.row ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 border-brand-200 dark:border-brand-700 shadow-sm' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300'}`;
+                div.innerHTML = `<span class="inline-block w-6 text-slate-400">${student.id}</span> ${student.name}`;
+                
+                div.onclick = () => {
+                    state.currentStudent = student;
+                    renderStudentList();
+                    els.curStudentName.innerText = student.id ? `${student.id}번 ${student.name}` : student.name;
+                    updateOverlay();
+                    renderCriteria();
+                    updateResultTexts();
+                };
+                els.studentList.appendChild(div);
+            });
+        }
+
+        function updateOverlay() {
+            if (!state.isAuthenticated) {
+                els.overlay.classList.remove('opacity-0', 'pointer-events-none');
+                els.overlayMsg.innerText = "상단에 관리자 인증번호를 입력해야 평가가 가능합니다.";
+            } else if (!state.currentStudent) {
+                els.overlay.classList.remove('opacity-0', 'pointer-events-none');
+                els.overlayMsg.innerText = "좌측에서 학생을 선택해주세요.";
+            } else {
+                els.overlay.classList.add('opacity-0', 'pointer-events-none');
+            }
+        }
+
+        function renderAssessmentTabs() {
+            els.assessmentTabs.innerHTML = '';
+            state.settings.assessments.forEach((ass, idx) => {
+                const btn = document.createElement('button');
+                const isActive = state.currentAssessmentIdx === idx;
+                btn.className = `px-5 py-2 rounded-lg text-sm font-semibold transition-all shrink-0 border ${isActive ? 'bg-white dark:bg-slate-700 text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-600 shadow-sm' : 'bg-transparent border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-700/50'}`;
+                btn.innerText = ass.name;
+                btn.onclick = () => {
+                    state.currentAssessmentIdx = idx;
+                    renderAssessmentTabs();
+                    renderCriteria(); 
+                };
+                els.assessmentTabs.appendChild(btn);
+            });
+        }
+
+        function renderCategoryTabs() {
+            els.categoryTabs.innerHTML = '';
+            state.settings.evalCategories.forEach((cat, idx) => {
+                const btn = document.createElement('button');
+                const isActive = state.currentCategoryIdx === idx;
+                btn.className = `px-3 py-1.5 rounded-md text-sm font-medium transition-colors border ${isActive ? 'bg-brand-600 dark:bg-brand-500 border-brand-600 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`;
+                btn.innerText = cat;
+                btn.onclick = () => {
+                    state.currentCategoryIdx = idx;
+                    renderCategoryTabs();
+                    renderCriteria();
+                };
+                els.categoryTabs.appendChild(btn);
+            });
+        }
+
+        function renderCriteria() {
+            if(!state.currentStudent) return;
+            const category = state.settings.evalCategories[state.currentCategoryIdx];
+            const data = state.criteria[category];
+            if(!data) return;
+
+            const sData = state.selections[state.currentStudent.uniqueKey].evalData;
+
+            els.criteriaContainer.innerHTML = '';
+            
+            const createSection = (title, items, colorClass, bgClass, borderClass) => {
+                if(items.length === 0) return;
+                const wrapper = document.createElement('div');
+                wrapper.className = `bg-white dark:bg-slate-800 rounded-xl border ${borderClass} overflow-hidden shadow-sm`;
+                
+                const header = document.createElement('div');
+                header.className = `px-4 py-2.5 font-bold text-sm ${colorClass} ${bgClass} border-b ${borderClass}`;
+                header.innerText = `[${title} 등급] 기준`;
+                wrapper.appendChild(header);
+
+                const list = document.createElement('div');
+                list.className = "p-2 space-y-1";
+
+                items.forEach(item => {
+                    const formattedItem = `[${category}]-${item}`;
+                    const isChecked = sData.includes(formattedItem);
+                    
+                    const label = document.createElement('label');
+                    label.className = `flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${isChecked ? 'bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-700' : 'hover:bg-slate-50 dark:hover:bg-slate-700/30 border border-transparent'}`;
+                    
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.className = "mt-1 w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 dark:focus:ring-brand-500 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-700 dark:border-slate-600 transition-all";
+                    cb.checked = isChecked;
+                    
+                    cb.onchange = (e) => {
+                        // 안전하게 배열 조작 (splice 문제 해결)
+                        if(e.target.checked) {
+                            if(!sData.includes(formattedItem)) sData.push(formattedItem);
+                        } else {
+                            const idx = sData.indexOf(formattedItem);
+                            if(idx > -1) {
+                                sData.splice(idx, 1);
+                            }
+                        }
+                        renderCriteria(); 
+                        updateResultTexts();
+                        triggerAutoSave(); 
+                    };
+
+                    const textSpan = document.createElement('span');
+                    textSpan.className = `text-sm leading-relaxed ${isChecked ? 'text-brand-900 dark:text-brand-100 font-medium' : 'text-slate-600 dark:text-slate-300'}`;
+                    textSpan.innerText = item;
+
+                    label.appendChild(cb);
+                    label.appendChild(textSpan);
+                    list.appendChild(label);
+                });
+                wrapper.appendChild(list);
+                els.criteriaContainer.appendChild(wrapper);
+            };
+
+            createSection('상', data.high, 'text-blue-700 dark:text-blue-400', 'bg-blue-50/50 dark:bg-blue-900/20', 'border-blue-100 dark:border-blue-800/50');
+            createSection('중', data.mid, 'text-emerald-700 dark:text-emerald-400', 'bg-emerald-50/50 dark:bg-emerald-900/20', 'border-emerald-100 dark:border-emerald-800/50');
+            createSection('하', data.low, 'text-amber-700 dark:text-amber-400', 'bg-amber-50/50 dark:bg-amber-900/20', 'border-amber-100 dark:border-amber-800/50');
+        }
+
+        function formatRichText(textStr) {
+            if(!textStr) return '';
+            return textStr.replace(/\[(.*?)\]-/g, '<strong class="text-red-600 dark:text-red-400 font-bold text-[13px] mx-1">[$1]</strong>');
+        }
+
+        function updateResultTexts() {
+            if(!state.currentStudent) return;
+            const sData = state.selections[state.currentStudent.uniqueKey];
+            const currentStudentData = state.students.find(s => s.uniqueKey === state.currentStudent.uniqueKey);
+            
+            // 화면 표시용 (줄바꿈 대신 띄어쓰기로 예쁘게 연결)
+            const previewStr = sData.evalData.join(' ');
+            
+            if(previewStr) {
+                els.previewEval.innerHTML = formatRichText(previewStr);
+                els.previewEval.classList.remove('flex', 'items-center', 'justify-center');
+            } else {
+                els.previewEval.innerHTML = '<span class="text-slate-400 text-xs">평가 항목을 체크하면 미리보기가 표시됩니다.</span>';
+                els.previewEval.classList.add('flex', 'items-center', 'justify-center');
+            }
+
+            if(currentStudentData && currentStudentData.total) {
+                // 시트에 저장된 원본 텍스트 표시
+                els.previewTotal.innerHTML = currentStudentData.total.replace(/\n/g, '<br>');
+                els.previewTotal.classList.remove('flex', 'items-center', 'justify-center');
+            } else {
+                els.previewTotal.innerHTML = '<span class="text-slate-400 text-xs">구글 시트의 [세특완성본] 열이 비어있습니다.</span>';
+                els.previewTotal.classList.add('flex', 'items-center', 'justify-center');
+            }
+        }
+
+        function setSyncStatus(status) {
+            const svgSync = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>`;
+            const svgCheck = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+            const svgError = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+            const spinner = `<div class="spinner w-3.5 h-3.5 border-[2px] border-white border-t-transparent mr-1"></div>`;
+
+            let html = '', classes = '';
+            
+            if (status === 'saving') {
+                html = `${spinner} <span>저장 중...</span>`;
+                classes = 'bg-brand-600 text-white border-brand-700';
+            } else if (status === 'saved') {
+                html = `${svgCheck} <span>저장 완료</span>`;
+                classes = 'bg-emerald-600 text-white border-emerald-700';
+            } else if (status === 'error') {
+                html = `${svgError} <span>저장 실패</span>`;
+                classes = 'bg-red-600 text-white border-red-700';
+            } else {
+                html = `${svgCheck} <span>최신 상태</span>`;
+                classes = 'bg-slate-700 text-slate-300 dark:bg-slate-900 border-slate-600 dark:border-slate-700 shadow-inner';
+            }
+
+            els.syncIndicator.innerHTML = html;
+            els.syncIndicator.className = `flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mr-2 transition-colors duration-300 border ${classes}`;
+        }
+
+        function triggerAutoSave() {
+            if(!state.currentStudent) return;
+            
+            setSyncStatus('saving');
+            isPendingSave = true; // 사용자 조작 감지 즉시 폴링 차단
+            clearTimeout(autoSaveTimeout);
+            
+            autoSaveTimeout = setTimeout(async () => {
+                isSaving = true;
+                const sData = state.selections[state.currentStudent.uniqueKey];
+                // 🔴 [핵심 변경] 구글 시트 저장 시 '줄바꿈(\n)' 문자로 쪼개서 저장하여 데이터 꼬임 완전 차단
+                const evalStr = sData.evalData.join('\n'); 
+
+                try {
+                    await fetchAppScript('saveStudentData', {
+                        className: state.currentClass,
+                        rowIndex: sData.row,
+                        evalText: evalStr
+                    }, true); 
+                    
+                    lastSaveTime = Date.now();
+                    setSyncStatus('saved');
+                    
+                    setTimeout(() => {
+                        if(!isSaving) setSyncStatus('idle');
+                    }, 2000);
+                } catch (err) {
+                    setSyncStatus('error');
+                } finally {
+                    isSaving = false;
+                    isPendingSave = false; // 저장이 완전히 끝나면 폴링 재개 허용
+                }
+            }, 1000);
+        }
+
+        async function pollClassData() {
+            // isPendingSave가 true이면 사용자가 뭔가 누르고 저장 중인 상태이므로 폴링 스킵 (덮어쓰기 방지)
+            if (!state.isAuthenticated || !state.currentClass || isSaving || isPendingSave) return;
+            if (Date.now() - lastSaveTime < 3000) return;
+
+            try {
+                const newStudents = await fetchAppScript('getClassData', { className: state.currentClass }, true);
+                if (!newStudents) return;
+
+                let requiresListRender = false;
+                let requiresCurrentRender = false;
+
+                if (newStudents.length !== state.students.length) {
+                    requiresListRender = true;
+                } else {
+                    for (let i = 0; i < newStudents.length; i++) {
+                        if (newStudents[i].id !== state.students[i].id || newStudents[i].name !== state.students[i].name) {
+                            requiresListRender = true;
+                            break;
+                        }
+                    }
+                }
+
+                const newSelections = {};
+                newStudents.forEach(newStudent => {
+                    const uniqueKey = newStudent.id || `row_${newStudent.row}`;
+                    newStudent.uniqueKey = uniqueKey;
+                    
+                    const oldSelection = state.selections[uniqueKey];
+                    const oldStudent = state.students.find(s => s.uniqueKey === uniqueKey);
+
+                    if (oldSelection && oldStudent) {
+                        const oldEvalStr = oldSelection.evalData.join('\n'); // 🔴 갱신 비교도 줄바꿈 기준으로
+                        const newEvalStr = newStudent.evalData || '';
+                        const oldTotalStr = oldStudent.total || '';
+                        const newTotalStr = newStudent.total || '';
+
+                        if (oldEvalStr !== newEvalStr || oldTotalStr !== newTotalStr) {
+                            newSelections[uniqueKey] = {
+                                row: newStudent.row,
+                                evalData: parseExistingEval(newEvalStr)
+                            };
+                            if (state.currentStudent && state.currentStudent.uniqueKey === uniqueKey) {
+                                requiresCurrentRender = true;
+                            }
+                        } else {
+                            newSelections[uniqueKey] = oldSelection;
+                            newSelections[uniqueKey].row = newStudent.row; 
+                        }
+                    } else {
+                        newSelections[uniqueKey] = {
+                            row: newStudent.row,
+                            evalData: parseExistingEval(newStudent.evalData)
+                        };
+                    }
+                });
+
+                state.students = newStudents;
+                state.selections = newSelections;
+
+                if (state.currentStudent && !state.students.find(s => s.uniqueKey === state.currentStudent.uniqueKey)) {
+                    state.currentStudent = null;
+                    els.curStudentName.innerText = "학생을 선택하세요";
+                    requiresListRender = true;
+                    requiresCurrentRender = true;
+                }
+
+                if (requiresListRender) renderStudentList();
+                
+                if (requiresCurrentRender) {
+                    if (state.currentStudent) {
+                        state.currentStudent = state.students.find(s => s.uniqueKey === state.currentStudent.uniqueKey);
+                        renderCriteria();
+                        updateResultTexts();
+                    } else {
+                        els.criteriaContainer.innerHTML = '';
+                        els.previewEval.innerHTML = '';
+                        els.previewTotal.innerHTML = '';
+                        updateOverlay();
+                    }
+                }
+            } catch (e) {
+                // background fail silent
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
